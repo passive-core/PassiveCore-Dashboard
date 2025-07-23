@@ -1,0 +1,9 @@
+{
+  "name": "dealsGenerator",
+  "version": "1.0.0",
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.3",
+    "@slack/webhook": "^7.0.5",
+    "nodemailer": "^6.9.1"
+  }
+}
