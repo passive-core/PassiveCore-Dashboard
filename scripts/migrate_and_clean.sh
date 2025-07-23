@@ -1,37 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🚀 1) Nuke old workspaces…"
-rm -rf ~/google-cloud-sdk \
-       ~/PassiveCore-Dashboard* \
-       ~/product-sync \
-       ~/aws-cli \
-       ~/analytics-reporter \
-       ~/analytics-reporter-infra \
-       ~/dealsGenerator-fn \
-       ~/bin \
-       ~/passivecore-dashboard-old
+ROOT_DIR="\$(pwd)"
+declare -a LEGACY_BASES=(
+  "\$HOME/legacy-all/passivecore-dashboard"
+  "\$HOME/legacy-all/analytics-reporter"
+  "\$HOME/legacy"
+  "\$HOME/analytics-reporter"
+)
 
-echo "📦 2) Prune node_modules, Docker & caches…"
-find ~ -maxdepth 2 -type d -name node_modules -prune -exec rm -rf {} +
-docker system prune -af
-npm cache clean --force
-yarn cache clean 2>/dev/null || true
+echo "[1/4] Cleaning old workspaces..."
+rm -rf "\$ROOT_DIR/workspaces"/* 2>/dev/null || true
 
-echo "📊 3) Show you’re under ~80%:"
-du -sh ~/* 2>/dev/null | sort -h | tail -n 10
+echo "[2/4] Pruning caches & node_modules..."
+find "\$ROOT_DIR" -type d \( -name "node_modules" -o -name ".cache" -o -name ".vercel" \) -prune -exec rm -rf {} +
 
-echo "🔀 4) Re-import only what you need…"
-# adjust these OLDx paths if your legacy code lives elsewhere
-OLD1=~/analytics-reporter
-OLD2=~/product-sync
-OLD3=~/supabase
+echo "[3/4] Copying staged legacy code..."
+for BASE in "\${LEGACY_BASES[@]}"; do
+  if [ -d "\$BASE" ]; then
+    for DIR in apps functions supabase/migrations src/supabase; do
+      if [ -d "\$BASE/\$DIR" ]; then
+        mkdir -p "\$ROOT_DIR/\$(dirname "\$DIR")"
+        cp -a "\$BASE/\$DIR" "\$ROOT_DIR/\$DIR"
+        echo "  • Copied \$DIR from \$BASE"
+      fi
+    done
+  fi
+done
 
-cp -R "$OLD1"/src/app   src/app-legacy-1
-cp -R "$OLD2"/src/app   src/app-legacy-2
-cp -R "$OLD3"/migrations   supabase/migrations-legacy
-cp "$OLD1"/cloudbuild.yaml  ./
-cp "$OLD2"/scan.js          ./
-cp "$OLD2"/server.js        ./
+echo "[4/4] (Optional) Bringing in recent files from legacy-all..."
+if [ -d "\$HOME/legacy-all" ]; then
+  find "\$HOME/legacy-all" -type f -mtime -30 -exec bash -c '
+    for f; do
+      rel="\${f#\$HOME/legacy-all/}"
+      dest="\$ROOT_DIR/\$rel"
+      mkdir -p "\$(dirname "\$dest")"
+      cp -a "\$f" "\$dest"
+      echo "  • Pulled recent file \$rel"
+    done
+  ' _ {} +
+fi
 
-echo "✅ Done! Now run \`npm install && npm run dev\`"
+echo "✅ Migration & cleanup complete."
